@@ -4,6 +4,44 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib.cm as cmx
 from scipy.fft import irfft, rfft, rfftfreq
+from scipy.io import wavfile
+import scipy.signal as sps
+
+
+def downsample(audio, rate, new_rate):
+    number_of_samples = round(len(audio) * float(new_rate) / rate)
+    return new_rate, sps.resample(audio, number_of_samples)
+
+
+
+def filename_to_instrument(filename):
+    return '.'.join(filename.replace('\\', '/').split('/')[-1].split('_')[:2])
+
+def load_wav(path, start=0, end=-1):
+    rate, audio = wavfile.read(path)
+    rate, audio = downsample(audio, rate, 16000)
+    if len(audio.shape) > 1:
+        audio = audio[:,0] # Take only the first channel.
+    audio = audio[int(start * rate):int(end * rate)]
+    audio = audio/2**15 # normalize to: [-1,1)
+    return rate, audio
+
+def preprocess(sample_rate, wav_data, window_size=0.02, amplitude_thresh=0.15):
+    """
+        - sample_rate: sample rate of the wav file
+        - wav_data: numpy array of audio data
+        - window_size: size of window in seconds
+        - amplitude_thresh: threshold for amplitude
+    """
+    windows = np.array_split(wav_data, len(wav_data) // int(sample_rate * window_size))
+    fft = np.array(list(map(calc_rfft, windows)))
+    fft = filtered_fft(sample_rate, fft, amplitude_thresh) # [{freq:amp}]
+    return fft
+
+def filtered_fft(sr, window_amplitudes, threshold=0.15):
+    thresh = np.max(window_amplitudes) * threshold
+    return [{freq:(amp if amp > thresh else 0) for freq, amp in zip(rfftfreq(len(amps), 1/sr), amps)} for amps in window_amplitudes]
+
 
 
 
